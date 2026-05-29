@@ -1,6 +1,6 @@
 from nexus.core.types import AgentResult, LLMResponse, Message, ToolCall, ToolCallRecord, TokenUsage
 from nexus.core.errors import NexusError
-from nexus.core.config import NexusConfig
+from nexus.core.config import AgentConfig, LoggingConfig, NexusConfig, ProviderConfig
 
 __all__ = [
     "Message",
@@ -11,4 +11,7 @@ __all__ = [
     "TokenUsage",
     "NexusError",
     "NexusConfig",
+    "ProviderConfig",
+    "AgentConfig",
+    "LoggingConfig",
 ]

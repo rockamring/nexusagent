@@ -1,6 +1,6 @@
 """Example 4: 多 Agent 协作 — 演示三种编排模式。
 
-运行前请设置:
+运行前设置环境变量或创建 config.yaml:
     export OPENAI_API_KEY="sk-..."
 
 运行:
@@ -8,13 +8,11 @@
 """
 
 import asyncio
-import os
 
-from nexus.llm.providers.openai import OpenAIProvider
+from nexus.llm import create_llm
 from nexus.agent import ReActAgent
 from nexus.orchestrator import (
     SequentialOrchestrator,
-    SupervisorOrchestrator,
     GraphOrchestrator,
     END,
 )
@@ -24,13 +22,13 @@ from nexus.tools.builtin.calculator import calculator
 
 
 async def demo_sequential():
-    """演示顺序编排：分析 → 写作 → 润色"""
+    """演示顺序编排：分析 -> 写作 -> 润色"""
     print("=" * 50)
     print("1. 顺序编排 (Sequential)")
     print("=" * 50)
 
-    api_key = os.getenv("OPENAI_API_KEY", "your-api-key-here")
-    llm = OpenAIProvider(api_key=api_key, default_model="gpt-4o-mini")
+    # 不同 Agent 可共享同一个 LLM 实例
+    llm = create_llm()
 
     analyzer = ReActAgent(
         name="分析员",
@@ -61,15 +59,7 @@ async def demo_graph():
     print("2. 图式编排 (Graph)")
     print("=" * 50)
 
-    api_key = os.getenv("OPENAI_API_KEY", "your-api-key-here")
-    llm = OpenAIProvider(api_key=api_key, default_model="gpt-4o-mini")
-
-    # 仅为演示：使用简单的条件路由
-    async def classifier(state: OrchestratorState) -> str:
-        task = state.get("task", "")
-        if "计算" in task or "算" in task:
-            return "math"
-        return "general"
+    llm = create_llm()
 
     math_agent = ReActAgent(
         name="数学助手",
@@ -77,6 +67,7 @@ async def demo_graph():
         tools=ToolRegistry(),
         system_prompt="你是数学专家，请解答数学问题。",
     )
+    math_agent._tools.register(calculator)
 
     general_agent = ReActAgent(
         name="通用助手",
@@ -85,10 +76,6 @@ async def demo_graph():
     )
 
     graph = GraphOrchestrator()
-    graph.add_node("classifier", classifier)
-    graph.add_node("math", math_agent)
-    graph.add_node("general", general_agent)
-    graph.set_entry_point("classifier")
 
     def route(state: OrchestratorState) -> str:
         task = state.get("task", "")
@@ -96,11 +83,12 @@ async def demo_graph():
             return "math"
         return "general"
 
-    graph.add_conditional_edges("classifier", route)
+    graph.add_node("math", math_agent)
+    graph.add_node("general", general_agent)
+    graph.set_entry_point("general")
+    graph.add_conditional_edges("general", route)
     graph.add_edge("math", END)
     graph.add_edge("general", END)
-
-    math_agent._tools.register(calculator)
 
     result = await graph.run("请帮我计算 12345 * 67890 的结果")
     print(f"[路由结果] math")

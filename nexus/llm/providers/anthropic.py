@@ -23,14 +23,20 @@ class AnthropicProvider(BaseLLM):
     用法:
         llm = AnthropicProvider(api_key="sk-ant-...", default_model="claude-sonnet-4-6")
         response = await llm.generate(messages, tools=[...])
+
+    支持通过 base_url 接入 Anthropic 兼容 API（如 LiteLLM 代理）。
     """
 
     def __init__(
         self,
         api_key: str,
         default_model: str = "claude-sonnet-4-6",
+        base_url: str | None = None,
     ):
-        self._client = AsyncAnthropic(api_key=api_key)
+        client_kwargs: dict = {"api_key": api_key}
+        if base_url:
+            client_kwargs["base_url"] = base_url
+        self._client = AsyncAnthropic(**client_kwargs)
         self._default_model = default_model
 
     @property

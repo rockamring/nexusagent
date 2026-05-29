@@ -27,6 +27,10 @@ htmlcov/
 .env
 .env.local
 
+# Config files（可能包含敏感信息）
+config.yaml
+config.yml
+
 # Memory data (ChromaDB)
 memory_data/
 

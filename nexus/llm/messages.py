@@ -15,7 +15,7 @@ def to_openai_messages(messages: list[Message]) -> list[dict]:
     - Tool 消息：映射为 tool 角色消息，关联 tool_call_id
     """
     result = []
-    for msg in messages:
+    for i, msg in enumerate(messages):
         role = msg["role"]
 
         if role == "system":
@@ -35,6 +35,25 @@ def to_openai_messages(messages: list[Message]) -> list[dict]:
                 "tool_call_id": msg.get("tool_call_id", ""),
                 "content": msg.get("content", ""),
             })
+
+    # 校验消息顺序：每条 tool 消息前必须能找到对应的 assistant(tool_calls)
+    for j, r in enumerate(result):
+        if r["role"] == "tool":
+            # 向前查找最近的非 tool 消息，必须是 assistant(tool_calls)
+            ok = False
+            for k in range(j - 1, -1, -1):
+                if result[k]["role"] != "tool":
+                    ok = (
+                        result[k]["role"] == "assistant"
+                        and "tool_calls" in result[k]
+                    )
+                    break
+            if not ok:
+                raise ValueError(
+                    f"消息顺序错误: 第 {j} 条是 tool 消息，但前面没有对应的 assistant(tool_calls)。"
+                    f" 实际角色序列: {[m['role'] for m in result]}\n"
+                    f" 请检查 react_agent.py 中 assistant 消息是否在 _act 之前追加。"
+                )
 
     return result
 

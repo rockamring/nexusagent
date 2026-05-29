@@ -4,6 +4,7 @@
 """
 
 from nexus.llm.base import BaseLLM
+from nexus.llm.factory import create_llm
 from nexus.llm.registry import LLMRegistry
 
-__all__ = ["BaseLLM", "LLMRegistry"]
+__all__ = ["BaseLLM", "LLMRegistry", "create_llm"]

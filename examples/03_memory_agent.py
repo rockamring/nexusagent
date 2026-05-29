@@ -1,6 +1,6 @@
 """Example 3: 带记忆的 Agent — 演示跨轮对话记忆。
 
-运行前请设置:
+运行前设置环境变量或创建 config.yaml:
     export OPENAI_API_KEY="sk-..."
 
 运行:
@@ -8,16 +8,14 @@
 """
 
 import asyncio
-import os
 
-from nexus.llm.providers.openai import OpenAIProvider
+from nexus.llm import create_llm
 from nexus.agent import ReActAgent
 from nexus.memory import BufferMemory
 
 
 async def main():
-    api_key = os.getenv("OPENAI_API_KEY", "your-api-key-here")
-    llm = OpenAIProvider(api_key=api_key, default_model="gpt-4o-mini")
+    llm = create_llm()
 
     # 创建带短期记忆的 Agent
     memory = BufferMemory(max_messages=20)

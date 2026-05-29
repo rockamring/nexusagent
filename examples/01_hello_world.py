@@ -1,6 +1,6 @@
 """Example 1: 最简 Agent — 演示框架最基本的用法。
 
-运行前请设置环境变量:
+运行前设置环境变量或创建 config.yaml:
     export OPENAI_API_KEY="sk-..."
 
 运行:
@@ -8,16 +8,17 @@
 """
 
 import asyncio
-import os
 
-from nexus.llm.providers.openai import OpenAIProvider
+from nexus.llm import create_llm
 from nexus.agent import ReActAgent
 
 
 async def main():
-    # 1. 创建 LLM Provider
-    api_key = os.getenv("OPENAI_API_KEY", "your-api-key-here")
-    llm = OpenAIProvider(api_key=api_key, default_model="gpt-4o-mini")
+    # 1. 创建 LLM — 自动从 config.yaml 或环境变量加载配置
+    llm = create_llm()
+
+    # 也可以手动指定参数覆盖配置:
+    # llm = create_llm(api_key="sk-...", default_model="gpt-4o-mini")
 
     # 2. 创建 Agent（不需要工具，纯对话）
     agent = ReActAgent(

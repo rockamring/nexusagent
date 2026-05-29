@@ -1,6 +1,9 @@
-"""Example 5: 自定义 LLM Provider — 演示如何接入新的 LLM 服务。
+"""Example 5: 自定义 LLM — 演示接入第三方服务和注册自定义 Provider。
 
-演示接入一个自定义的 LLM Provider（兼容 OpenAI API 格式的第三方服务）。
+演示:
+1. 通过 config.yaml 配置 base_url 接入 Ollama / vLLM / LiteLLM
+2. 通过 LLMRegistry 注册自定义 Provider
+3. 使用 create_llm() 自动加载配置
 
 运行:
     python examples/05_custom_llm.py
@@ -8,54 +11,61 @@
 
 import asyncio
 
+from nexus.core.config import NexusConfig
+from nexus.llm import create_llm, LLMRegistry
 from nexus.agent import ReActAgent
-from nexus.llm.base import BaseLLM
-from nexus.llm.registry import LLMRegistry
 
 
 async def main():
-    # 使用 OpenAIProvider 的 base_url 参数接入任意兼容的服务
-    # 例如：本地 Ollama、vLLM、LiteLLM 代理等
-
-    from nexus.llm.providers.openai import OpenAIProvider
-
-    # 示例：接入本地 Ollama 服务
-    # llm = OpenAIProvider(
-    #     api_key="ollama",  # Ollama 不需要真实 key
-    #     base_url="http://localhost:11434/v1",
-    #     default_model="llama3",
-    # )
-
-    print("自定义 LLM Provider 示例")
+    print("自定义 LLM 配置示例")
     print("=" * 50)
-    print("使用 OpenAIProvider + base_url 参数可以接入任意兼容 OpenAI API 的服务：")
     print()
-    print("  # 本地 Ollama")
-    print('  llm = OpenAIProvider(api_key="ollama", base_url="http://localhost:11434/v1", default_model="llama3")')
-    print()
-    print("  # vLLM")
-    print('  llm = OpenAIProvider(api_key="none", base_url="http://localhost:8000/v1", default_model="qwen2.5")')
-    print()
-    print("  # LiteLLM 代理")
-    print('  llm = OpenAIProvider(api_key="sk-...", base_url="http://localhost:4000/v1", default_model="gpt-4o")')
-    print()
-    print("也可以通过 LLMRegistry 注册自定义 Provider：")
-    print()
-    print("  LLMRegistry.register('my_provider', MyCustomProvider)")
-    print('  llm = LLMRegistry.create("my_provider", ...)')
+    print("方式 1: 通过 config.yaml 配置（推荐）")
+    print("-" * 30)
+    print("""
+  # config.yaml
+  default_provider: ollama
 
-    # 显示当前已注册的 Provider
-    print()
-    print("当前已注册的 Provider（需要在代码中 import 并 register）：")
+  providers:
+    ollama:
+      api_key: "ollama"   # Ollama 不需要真实 key
+      base_url: "http://localhost:11434/v1"
+      default_model: "llama3"
 
-    # 手动注册以演示
+    vllm:
+      api_key: "none"
+      base_url: "http://localhost:8000/v1"
+      default_model: "qwen2.5"
+
+    litellm:
+      api_key: "${LITELLM_API_KEY}"
+      base_url: "http://localhost:4000/v1"
+      default_model: "gpt-4o"
+""")
+    print("然后一行代码即可创建:")
+    print('  llm = create_llm("ollama")')
+    print()
+
+    print("方式 2: 从代码构造配置")
+    print("-" * 30)
+    config = NexusConfig.from_file()  # 自动查找 config.yaml
+    if config.providers:
+        print(f"  已加载 Provider: {list(config.providers.keys())}")
+        for name, cfg in config.providers.items():
+            print(f"    {name}: model={cfg.default_model}, base_url={cfg.base_url or '(默认)'}")
+    else:
+        print("  未找到配置文件（使用环境变量或默认值）")
+        print("  提示: 复制 config.yaml 到项目根目录并编辑")
+
+    print()
+    print("方式 3: 注册自定义 Provider")
+    print("-" * 30)
     from nexus.llm.providers.openai import OpenAIProvider
     from nexus.llm.providers.anthropic import AnthropicProvider
 
     LLMRegistry.register("openai", OpenAIProvider)
     LLMRegistry.register("anthropic", AnthropicProvider)
-
-    print(f"  {LLMRegistry.list_providers()}")
+    print(f"  已注册: {LLMRegistry.list_providers()}")
 
 
 if __name__ == "__main__":

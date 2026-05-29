@@ -8,6 +8,7 @@ import pytest
 from nexus.agent.base import BaseAgent
 from nexus.agent.react_agent import ReActAgent
 from nexus.core.types import AgentResult, LLMResponse
+from nexus.llm.messages import to_openai_messages
 from nexus.tools.registry import ToolRegistry
 from nexus.tools.base import Tool
 
@@ -144,3 +145,61 @@ async def test_react_agent_max_iterations():
     with pytest.raises(Exception) as exc_info:
         await agent.run("测试循环")
     assert "最大循环次数" in str(exc_info.value) or "3" in str(exc_info.value)
+
+
+# ── 消息顺序校验测试 ──────────────────────
+
+def test_to_openai_messages_correct_order():
+    """正确顺序: assistant(tool_calls) → tool，应通过。"""
+    messages = [
+        {"role": "system", "content": "你是助手。"},
+        {"role": "user", "content": "帮我查时间。"},
+        {"role": "assistant", "content": None, "tool_calls": [
+            {"id": "call_1", "name": "get_time", "arguments": {}}
+        ]},
+        {"role": "tool", "content": "16:00", "tool_call_id": "call_1"},
+    ]
+    result = to_openai_messages(messages)
+    assert len(result) == 4
+
+
+def test_to_openai_messages_wrong_order_raises():
+    """错误顺序: tool 消息在 assistant(tool_calls) 之前，应抛出 ValueError。"""
+    messages = [
+        {"role": "system", "content": "你是助手。"},
+        {"role": "user", "content": "帮我查时间。"},
+        # assistant 消息在 tool 之后 — 这是修复前的 bug
+        {"role": "tool", "content": "16:00", "tool_call_id": "call_1"},
+        {"role": "assistant", "content": None, "tool_calls": [
+            {"id": "call_1", "name": "get_time", "arguments": {}}
+        ]},
+    ]
+    with pytest.raises(ValueError, match="消息顺序错误"):
+        to_openai_messages(messages)
+
+
+def test_to_openai_messages_multiple_tool_results():
+    """一个 assistant 带多个 tool_calls，后面连续多个 tool 结果，应通过。"""
+    messages = [
+        {"role": "system", "content": "你是助手。"},
+        {"role": "user", "content": "帮我查时间和日期。"},
+        {"role": "assistant", "content": None, "tool_calls": [
+            {"id": "call_1", "name": "get_time", "arguments": {}},
+            {"id": "call_2", "name": "get_date", "arguments": {}},
+        ]},
+        {"role": "tool", "content": "16:00", "tool_call_id": "call_1"},
+        {"role": "tool", "content": "2026-05-29", "tool_call_id": "call_2"},
+    ]
+    result = to_openai_messages(messages)
+    assert len(result) == 5
+
+
+def test_to_openai_messages_orphan_tool_raises():
+    """没有 assistant(tool_calls) 但有 tool 消息，应抛出 ValueError。"""
+    messages = [
+        {"role": "system", "content": "你是助手。"},
+        {"role": "user", "content": "帮我查时间。"},
+        {"role": "tool", "content": "16:00", "tool_call_id": "call_1"},
+    ]
+    with pytest.raises(ValueError, match="消息顺序错误"):
+        to_openai_messages(messages)

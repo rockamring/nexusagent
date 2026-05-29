@@ -1,6 +1,6 @@
 """Example 2: 带工具的 Agent — 演示 Tool Calling。
 
-运行前请设置:
+运行前设置环境变量或创建 config.yaml:
     export OPENAI_API_KEY="sk-..."
 
 运行:
@@ -8,9 +8,8 @@
 """
 
 import asyncio
-import os
 
-from nexus.llm.providers.openai import OpenAIProvider
+from nexus.llm import create_llm
 from nexus.agent import ReActAgent
 from nexus.tools.registry import ToolRegistry
 from nexus.tools.builtin.calculator import calculator
@@ -18,9 +17,8 @@ from nexus.tools.builtin.file_ops import read_file, write_file, list_files
 
 
 async def main():
-    # 1. 创建 LLM Provider
-    api_key = os.getenv("OPENAI_API_KEY", "your-api-key-here")
-    llm = OpenAIProvider(api_key=api_key, default_model="gpt-4o-mini")
+    # 1. 创建 LLM — 自动从 config.yaml 或环境变量加载配置
+    llm = create_llm()
 
     # 2. 注册工具
     tools = ToolRegistry()

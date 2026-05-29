@@ -157,15 +157,17 @@ class ReActAgent(BaseAgent):
                 # 循环检测
                 self._check_loop(response)
 
-                # [Act] 执行工具
-                await self._act(response.tool_calls, messages)
-
                 # 将 Assistant 消息（含 tool_calls）追加到历史
+                # 必须在工具结果之前，否则 OpenAI 会报错：
+                # "Messages with role 'tool' must be a response to a preceding message with 'tool_calls'"
                 messages.append({
                     "role": "assistant",
                     "content": response.content,
                     "tool_calls": response.tool_calls,
                 })
+
+                # [Act] 执行工具
+                await self._act(response.tool_calls, messages)
                 continue
             else:
                 # [Respond] 最终回复
@@ -218,12 +220,14 @@ class ReActAgent(BaseAgent):
             )
 
             if response.tool_calls:
-                await self._act(response.tool_calls, messages)
+                # 将 Assistant 消息（含 tool_calls）追加到历史
+                # 必须在工具结果之前
                 messages.append({
                     "role": "assistant",
                     "content": response.content,
                     "tool_calls": response.tool_calls,
                 })
+                await self._act(response.tool_calls, messages)
                 continue
             else:
                 # 对于最终回复，使用流式输出

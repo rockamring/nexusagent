@@ -1,0 +1,49 @@
+# NexusAgent 配置文件 (模板)
+# =============================
+#
+# 首次使用请复制此文件为 config.yaml:
+#   cp config.yaml.example config.yaml
+#
+# config.yaml 已被 .gitignore 忽略，不会提交到 git，
+# 你可以放心地在里面填写真实的 API Key。
+#
+# 配置优先级（从高到低）：代码传入 > 环境变量 > 本文件值 > 默认值
+# 字符串中的 ${VAR} 会自动替换为对应的环境变量值
+#
+# 使用方式:
+#   llm = create_llm()  # 自动查找 ./config.yaml > ./config.yml > ./config.yaml.example
+
+# 默认使用的 Provider 和模型（必填项）
+default_provider: openai
+default_model: gpt-4o-mini
+
+# Provider 配置 — 每个 Provider 可独立配置 api_key / base_url / default_model
+providers:
+  openai:
+    # API Key，建议使用环境变量引用 ${OPENAI_API_KEY}
+    api_key: "${OPENAI_API_KEY}"
+    # 兼容 OpenAI API 的服务地址（可选）
+    # 本地 Ollama:    http://localhost:11434/v1
+    # vLLM:           http://localhost:8000/v1
+    # LiteLLM 代理:    http://localhost:4000/v1
+    base_url: ""
+    # 该 Provider 的默认模型
+    default_model: gpt-4o
+
+  anthropic:
+    api_key: "${ANTHROPIC_API_KEY}"
+    # Anthropic 兼容 API 地址（可选）
+    base_url: ""
+    default_model: claude-sonnet-4-6
+
+# Agent 引擎配置
+agent:
+  # 最大循环轮数（超过此值强制终止）
+  max_iterations: 10
+  # 连续重复 tool_call 检测阈值
+  loop_detection_threshold: 3
+
+# 日志配置
+logging:
+  level: INFO
+  format: json
