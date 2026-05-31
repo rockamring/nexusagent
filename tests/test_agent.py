@@ -203,3 +203,113 @@ def test_to_openai_messages_orphan_tool_raises():
     ]
     with pytest.raises(ValueError, match="消息顺序错误"):
         to_openai_messages(messages)
+
+
+# ── Memory 写入测试 ──────────────────────
+
+@pytest.mark.asyncio
+async def test_agent_writes_conversation_to_memory():
+    """测试 Agent 将用户输入和助手回复写入 Memory。"""
+    from nexus.memory.buffer import BufferMemory
+
+    memory = BufferMemory(max_messages=20)
+    llm = MockLLM(responses=[
+        LLMResponse(content="你好小明！我记住了。", finish_reason="stop"),
+    ])
+
+    agent = ReActAgent(
+        name="记忆测试",
+        llm=llm,
+        memory=memory,
+        system_prompt="你是测试助手。",
+    )
+
+    await agent.run("我叫小明")
+
+    ctx = await memory.get_context()
+    assert len(ctx) == 2
+    assert ctx[0]["role"] == "user"
+    assert ctx[0]["content"] == "我叫小明"
+    assert ctx[1]["role"] == "assistant"
+    assert "小明" in ctx[1]["content"]
+
+
+@pytest.mark.asyncio
+async def test_agent_memory_across_turns():
+    """测试 Memory 跨轮对话：第 2 轮能获取第 1 轮的消息。"""
+    from nexus.memory.buffer import BufferMemory
+
+    memory = BufferMemory(max_messages=20)
+    llm = MockLLM(responses=[
+        LLMResponse(content="记住了，你叫小明。", finish_reason="stop"),
+        LLMResponse(content="小明，你之前说过喜欢 Python。", finish_reason="stop"),
+    ])
+
+    agent = ReActAgent(
+        name="记忆测试",
+        llm=llm,
+        memory=memory,
+        system_prompt="你是一个有记忆的助手。",
+    )
+
+    # 第 1 轮
+    result1 = await agent.run("我叫小明，我喜欢 Python")
+    assert "小明" in result1.content
+
+    # 第 2 轮 — memory 应包含上一轮的用户和助手消息
+    result2 = await agent.run("我喜欢什么？")
+    assert "Python" in result2.content
+
+    # 验证 memory 中有 4 条消息 (user1, assistant1, user2, assistant2)
+    ctx = await memory.get_context()
+    assert len(ctx) == 4
+    assert ctx[0]["role"] == "user"
+    assert ctx[0]["content"] == "我叫小明，我喜欢 Python"
+    assert ctx[1]["role"] == "assistant"
+    assert ctx[2]["role"] == "user"
+    assert ctx[2]["content"] == "我喜欢什么？"
+    assert ctx[3]["role"] == "assistant"
+
+
+@pytest.mark.asyncio
+async def test_agent_writes_tool_calls_to_memory():
+    """测试 Agent 将工具调用和结果写入 Memory。"""
+    from nexus.memory.buffer import BufferMemory
+
+    @Tool.from_function(name="get_time", description="获取当前时间")
+    async def get_time() -> str:
+        return "16:00"
+
+    tools = ToolRegistry()
+    tools.register(get_time)
+
+    memory = BufferMemory(max_messages=20)
+    llm = MockLLM(responses=[
+        LLMResponse(
+            content=None,
+            tool_calls=[{"id": "call_1", "name": "get_time", "arguments": {}}],
+            finish_reason="tool_calls",
+        ),
+        LLMResponse(content="现在是16:00。", finish_reason="stop"),
+    ])
+
+    agent = ReActAgent(
+        name="工具记忆测试",
+        llm=llm,
+        tools=tools,
+        memory=memory,
+        system_prompt="你是时间助手。",
+    )
+
+    await agent.run("现在几点了？")
+
+    ctx = await memory.get_context()
+    # 应有 4 条: user, assistant(tool_calls), tool(result), assistant(final)
+    assert len(ctx) == 4
+    assert ctx[0]["role"] == "user"
+    assert ctx[1]["role"] == "assistant"
+    assert ctx[1].get("tool_calls") is not None
+    assert ctx[2]["role"] == "tool"
+    assert ctx[2].get("tool_call_id") == "call_1"
+    assert ctx[3]["role"] == "assistant"
+    assert "16:00" in ctx[3]["content"]

@@ -116,6 +116,10 @@ class ReActAgent(BaseAgent):
         # Step 1: 构建初始消息
         messages = await self._build_initial_messages(user_input)
 
+        # Step 1b: 将用户输入写入 Memory（必须在 get_context 之后）
+        if self._memory:
+            await self._memory.add({"role": "user", "content": user_input})
+
         logger.info("agent_start", agent=self.name, input=user_input[:200])
 
         # Step 2: ReAct 主循环
@@ -160,11 +164,16 @@ class ReActAgent(BaseAgent):
                 # 将 Assistant 消息（含 tool_calls）追加到历史
                 # 必须在工具结果之前，否则 OpenAI 会报错：
                 # "Messages with role 'tool' must be a response to a preceding message with 'tool_calls'"
-                messages.append({
+                assistant_msg: Message = {
                     "role": "assistant",
                     "content": response.content,
                     "tool_calls": response.tool_calls,
-                })
+                }
+                messages.append(assistant_msg)
+
+                # 同步写入 Memory
+                if self._memory:
+                    await self._memory.add(assistant_msg)
 
                 # [Act] 执行工具
                 await self._act(response.tool_calls, messages)
@@ -177,6 +186,14 @@ class ReActAgent(BaseAgent):
                     iterations=self._iteration,
                     tools_called=len(self._tool_call_log),
                 )
+
+                # 同步写入 Memory: 最终回复
+                if self._memory:
+                    await self._memory.add({
+                        "role": "assistant",
+                        "content": response.content or "",
+                    })
+
                 return AgentResult(
                     content=response.content or "",
                     iterations=self._iteration,
@@ -201,6 +218,10 @@ class ReActAgent(BaseAgent):
 
         messages = await self._build_initial_messages(user_input)
 
+        # 将用户输入写入 Memory
+        if self._memory:
+            await self._memory.add({"role": "user", "content": user_input})
+
         while self._iteration < self._max_iterations:
             self._iteration += 1
 
@@ -222,15 +243,22 @@ class ReActAgent(BaseAgent):
             if response.tool_calls:
                 # 将 Assistant 消息（含 tool_calls）追加到历史
                 # 必须在工具结果之前
-                messages.append({
+                assistant_msg: Message = {
                     "role": "assistant",
                     "content": response.content,
                     "tool_calls": response.tool_calls,
-                })
+                }
+                messages.append(assistant_msg)
+
+                # 同步写入 Memory
+                if self._memory:
+                    await self._memory.add(assistant_msg)
+
                 await self._act(response.tool_calls, messages)
                 continue
             else:
                 # 对于最终回复，使用流式输出
+                full_text = ""
                 async for chunk in self._llm.generate_stream(
                     messages=messages,
                     tools=None,  # 最终回复不需要 tools
@@ -239,7 +267,15 @@ class ReActAgent(BaseAgent):
                     max_tokens=kwargs.get("max_tokens", 4096),
                 ):
                     if isinstance(chunk, str):
+                        full_text += chunk
                         yield chunk
+
+                # 同步写入 Memory: 最终回复
+                if self._memory and full_text:
+                    await self._memory.add({
+                        "role": "assistant",
+                        "content": full_text,
+                    })
                 return
 
         raise MaxIterationError(f"Agent '{self.name}' 超过最大循环次数 {self._max_iterations}")
@@ -318,6 +354,7 @@ class ReActAgent(BaseAgent):
                 await self._memory.add({
                     "role": "tool",
                     "content": f"[{tool_name}] {result_text}",
+                    "tool_call_id": call_id,
                 })
 
     def _check_loop(self, response: LLMResponse) -> None:
