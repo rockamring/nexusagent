@@ -127,12 +127,7 @@ async def _chat_fn(
 
 def create_ui() -> gr.Blocks:
     """创建 Gradio UI。"""
-    theme = gr.themes.Soft(
-        primary_hue="blue",
-        secondary_hue="slate",
-    )
-
-    with gr.Blocks(theme=theme, title="NexusAgent Chat") as demo:
+    with gr.Blocks(title="NexusAgent Chat") as demo:
         gr.Markdown("# NexusAgent Chat")
 
         with gr.Row():
@@ -173,7 +168,6 @@ def create_ui() -> gr.Blocks:
             with gr.Column(scale=3):
                 chatbot = gr.ChatInterface(
                     fn=_chat_fn,
-                    type="messages",
                     additional_inputs=[
                         provider,
                         model,
@@ -182,9 +176,9 @@ def create_ui() -> gr.Blocks:
                         enable_memory,
                     ],
                     examples=[
-                        "你好！请介绍一下你自己。",
-                        "计算 (123 + 456) * 789",
-                        "列出当前目录下的文件",
+                        ["你好！请介绍一下你自己。", _default_provider(), _default_model(), _default_system_prompt(), 10, True],
+                        ["计算 (123 + 456) * 789", _default_provider(), _default_model(), _default_system_prompt(), 10, True],
+                        ["列出当前目录下的文件", _default_provider(), _default_model(), _default_system_prompt(), 10, True],
                     ],
                     title="",
                     description="",
@@ -209,6 +203,9 @@ def launch(**kwargs):
         "show_error": True,
     }
     defaults.update(kwargs)
+    # theme 在 Gradio 6.x 中必须传给 launch() 而非 Blocks()
+    if "theme" not in defaults:
+        defaults["theme"] = gr.themes.Soft(primary_hue="blue", secondary_hue="slate")
 
     demo = create_ui()
     print(f"启动 NexusAgent Chat: http://{defaults['server_name']}:{defaults['server_port']}")
