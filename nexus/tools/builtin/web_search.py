@@ -13,9 +13,9 @@ async def web_search(query: str) -> str:
     注意：这是一个示例实现，实际使用时需要接入真实的搜索 API
     （如 Google Custom Search、Bing Search API、SerpAPI 等）。
     """
-    import urllib.request
-    import urllib.parse
     import json
+    import urllib.parse
+    import urllib.request
 
     # 使用 DuckDuckGo 的 Instant Answer API（免费，无需 API Key）
     url = f"https://api.duckduckgo.com/?q={urllib.parse.quote(query)}&format=json&no_html=1&skip_disambig=1"

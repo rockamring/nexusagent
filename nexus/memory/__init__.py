@@ -5,9 +5,9 @@
 
 from nexus.memory.base import BaseMemory
 from nexus.memory.buffer import BufferMemory
-from nexus.memory.vector_store import VectorStoreMemory
-from nexus.memory.summary import SummaryMemory
 from nexus.memory.composite import CompositeMemory
+from nexus.memory.summary import SummaryMemory
+from nexus.memory.vector_store import VectorStoreMemory
 
 __all__ = [
     "BaseMemory",

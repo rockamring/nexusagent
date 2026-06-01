@@ -6,7 +6,6 @@ from nexus.tools.base import Tool
 from nexus.tools.registry import ToolRegistry
 from nexus.tools.schema import build_schema
 
-
 # ── Schema 生成测试 ──────────────────────────
 
 def test_build_schema_simple():

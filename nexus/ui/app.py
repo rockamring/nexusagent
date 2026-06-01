@@ -6,10 +6,6 @@
 
 from __future__ import annotations
 
-import asyncio
-import sys
-from pathlib import Path
-
 import gradio as gr
 
 from nexus.agent import ReActAgent

@@ -10,7 +10,7 @@ Handoff 本质上是一个特殊的 Tool：
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from nexus.core.types import AgentResult
 from nexus.tools.base import BaseTool

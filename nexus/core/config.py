@@ -25,6 +25,8 @@ class AgentConfig(BaseModel):
 
     max_iterations: int = Field(default=10, description="Agent 最大循环轮数")
     loop_detection_threshold: int = Field(default=3, description="相同 tool_call 连续出现 N 次则判定为循环")
+    max_retries: int = Field(default=3, description="LLM 调用最大重试次数")
+    retry_delay: float = Field(default=1.0, description="重试初始延迟（秒），每次翻倍")
 
 
 class LoggingConfig(BaseModel):

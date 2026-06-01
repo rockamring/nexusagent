@@ -180,7 +180,6 @@ class GraphOrchestrator(BaseOrchestrator):
 
     async def stream(self, task: str, **kwargs) -> list[OrchestratorEvent]:
         """流式执行，每个节点完成时产出一个事件。"""
-        import asyncio
 
         events: list[OrchestratorEvent] = []
         state = OrchestratorState(initial_data={"task": task, "current_input": task})

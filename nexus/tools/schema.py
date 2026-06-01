@@ -17,7 +17,7 @@
 from __future__ import annotations
 
 import inspect
-from typing import Any, Callable, get_type_hints
+from typing import Callable, get_type_hints
 
 
 def build_schema(

@@ -4,10 +4,9 @@ import pytest
 
 from nexus.agent.base import BaseAgent
 from nexus.core.types import AgentResult
+from nexus.orchestrator.graph import END, GraphOrchestrator
 from nexus.orchestrator.sequential import SequentialOrchestrator
 from nexus.orchestrator.state import OrchestratorState
-from nexus.orchestrator.graph import GraphOrchestrator, END
-
 
 # ── Mock Agent ──────────────────────────────
 

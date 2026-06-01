@@ -2,7 +2,6 @@
 
 import pytest
 
-from nexus.core.types import Message
 from nexus.memory.buffer import BufferMemory
 from nexus.memory.composite import CompositeMemory
 

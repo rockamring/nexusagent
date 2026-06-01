@@ -27,19 +27,16 @@
 
 from __future__ import annotations
 
-import hashlib
 import time
 from collections.abc import AsyncIterator, Callable
 
+from nexus.agent.base import BaseAgent
 from nexus.core.errors import MaxIterationError, ToolNotFoundError
 from nexus.core.types import AgentResult, LLMResponse, Message, ToolCallRecord
 from nexus.llm.base import BaseLLM
 from nexus.memory.base import BaseMemory
-from nexus.tools.base import ToolResult
 from nexus.tools.registry import ToolRegistry
 from nexus.utils import get_logger
-
-from nexus.agent.base import BaseAgent
 
 logger = get_logger(__name__)
 
@@ -158,8 +155,8 @@ class ReActAgent(BaseAgent):
 
             # 2e: [Check] 是否有工具调用
             if response.tool_calls:
-                # 循环检测
-                self._check_loop(response)
+                # 循环检测（检测到循环时注入干预消息）
+                await self._check_loop(response, messages)
 
                 # 将 Assistant 消息（含 tool_calls）追加到历史
                 # 必须在工具结果之前，否则 OpenAI 会报错：
@@ -208,75 +205,81 @@ class ReActAgent(BaseAgent):
         )
 
     async def stream(self, user_input: str, **kwargs) -> AsyncIterator[str]:
-        """流式执行 Agent。
+        """流式执行 Agent——每一轮都使用流式输出。
 
-        对于非工具调用的轮次，流式产出 LLM 文本。
-        对于工具调用轮次，执行工具后继续循环。
+        核心改进：不再先用非流式检查 tool_calls，而是直接流式接收 LLM 输出。
+        - text chunk → 立即 yield 给用户
+        - tool_call → 累积，流结束后执行工具，进入下一轮循环
+        - 无 tool_call → 最终回复已流式输出完毕，返回
+
+        这样用户在工具调用轮次也能看到模型的"思考"过程（如 "Let me calculate..."）。
         """
         self._iteration = 0
         self._tool_call_log.clear()
 
         messages = await self._build_initial_messages(user_input)
 
-        # 将用户输入写入 Memory
         if self._memory:
             await self._memory.add({"role": "user", "content": user_input})
 
         while self._iteration < self._max_iterations:
             self._iteration += 1
 
+            if self._token_budget:
+                messages = self._trim_messages(messages)
+
+            if self._pre_model_hook:
+                messages = self._pre_model_hook(messages)
+
             tool_schemas = self._tools.get_schemas() if self._tools else None
 
-            # 使用流式生成
-            text_buffer = ""
-            last_tool_calls = None
+            # 每轮都使用流式——text 直接 yield，tool_call 累积
+            text_parts: list[str] = []
+            tool_calls_received: list = []
 
-            # 先尝试流式收集（这里简化：先用非流式检查是否有 tool_calls）
-            response = await self._llm.generate(
+            async for chunk in self._llm.generate_stream(
                 messages=messages,
                 tools=tool_schemas,
                 model=kwargs.get("model"),
                 temperature=kwargs.get("temperature", 0.7),
                 max_tokens=kwargs.get("max_tokens", 4096),
-            )
+            ):
+                if isinstance(chunk, str):
+                    text_parts.append(chunk)
+                    yield chunk
+                else:
+                    tool_calls_received.append(chunk)
 
-            if response.tool_calls:
-                # 将 Assistant 消息（含 tool_calls）追加到历史
-                # 必须在工具结果之前
+            # 有工具调用 → 执行后继续循环
+            if tool_calls_received:
+                loop_response = LLMResponse(
+                    content="".join(text_parts) if text_parts else None,
+                    tool_calls=tool_calls_received,
+                    finish_reason="tool_calls",
+                )
+                await self._check_loop(loop_response, messages)
+
                 assistant_msg: Message = {
                     "role": "assistant",
-                    "content": response.content,
-                    "tool_calls": response.tool_calls,
+                    "content": loop_response.content,
+                    "tool_calls": loop_response.tool_calls,
                 }
                 messages.append(assistant_msg)
 
-                # 同步写入 Memory
                 if self._memory:
                     await self._memory.add(assistant_msg)
 
-                await self._act(response.tool_calls, messages)
+                await self._act(tool_calls_received, messages)
                 continue
-            else:
-                # 对于最终回复，使用流式输出
-                full_text = ""
-                async for chunk in self._llm.generate_stream(
-                    messages=messages,
-                    tools=None,  # 最终回复不需要 tools
-                    model=kwargs.get("model"),
-                    temperature=kwargs.get("temperature", 0.7),
-                    max_tokens=kwargs.get("max_tokens", 4096),
-                ):
-                    if isinstance(chunk, str):
-                        full_text += chunk
-                        yield chunk
 
-                # 同步写入 Memory: 最终回复
-                if self._memory and full_text:
-                    await self._memory.add({
-                        "role": "assistant",
-                        "content": full_text,
-                    })
-                return
+            # 无工具调用 → 最终回复已通过 yield 流式输出完毕
+            full_text = "".join(text_parts)
+            if self._memory and full_text:
+                await self._memory.add({
+                    "role": "assistant",
+                    "content": full_text,
+                })
+            return
 
         raise MaxIterationError(f"Agent '{self.name}' 超过最大循环次数 {self._max_iterations}")
 
@@ -357,12 +360,12 @@ class ReActAgent(BaseAgent):
                     "tool_call_id": call_id,
                 })
 
-    def _check_loop(self, response: LLMResponse) -> None:
-        """检测 Agent 是否陷入循环（连续调用相同工具且参数相同）。
+    async def _check_loop(self, response: LLMResponse, messages: list[Message]) -> None:
+        """检测 Agent 是否陷入循环并主动注入干预消息。
 
         如果连续 N 次（loop_detection_threshold）调用相同的工具和参数，
-        则强制注入一条 user 消息提示 Agent 不要重复操作。
-        这个检查只在第 3+ 次工具调用时才可能触发。
+        则向消息历史注入一条 user 消息提示 Agent 尝试其他方法。
+        这比被动日志更有效——LLM 看到这条消息后通常会调整策略。
         """
         if self._iteration < self._loop_detection_threshold:
             return
@@ -370,7 +373,6 @@ class ReActAgent(BaseAgent):
         if not response.tool_calls or not self._tool_call_log:
             return
 
-        # 检查最近 N 次调用是否相同
         recent = self._tool_call_log[-(self._loop_detection_threshold):]
         if len(recent) < self._loop_detection_threshold:
             return
@@ -387,6 +389,15 @@ class ReActAgent(BaseAgent):
                 arguments=str(first.arguments)[:100],
                 count=self._loop_detection_threshold,
             )
+
+            # 注入干预消息，引导 Agent 跳出循环
+            intervention = (
+                f"你似乎重复了相同的操作（连续调用 `{first.tool_name}` {self._loop_detection_threshold} 次），"
+                f"请尝试其他方法，或直接给出你能提供的最佳回答。"
+            )
+            messages.append({"role": "user", "content": intervention})
+            if self._memory:
+                await self._memory.add({"role": "user", "content": intervention})
 
     def _trim_messages(self, messages: list[Message]) -> list[Message]:
         """根据 token 预算裁剪消息历史。

@@ -32,7 +32,10 @@ class OpenAIProvider(BaseLLM):
         api_key: str,
         default_model: str = "gpt-4o",
         base_url: str | None = None,
+        max_retries: int = 3,
+        retry_delay: float = 1.0,
     ):
+        super().__init__(max_retries=max_retries, retry_delay=retry_delay)
         client_kwargs = {"api_key": api_key}
         if base_url:
             client_kwargs["base_url"] = base_url
@@ -84,7 +87,10 @@ class OpenAIProvider(BaseLLM):
         if stop_sequences:
             kwargs["stop"] = stop_sequences
 
-        response = await self._client.chat.completions.create(**kwargs)
+        response = await self._retry_call(
+            lambda: self._client.chat.completions.create(**kwargs),
+            "OpenAI API",
+        )
         choice = response.choices[0]
 
         tool_calls = None
@@ -138,7 +144,10 @@ class OpenAIProvider(BaseLLM):
         if api_tools:
             kwargs["tools"] = api_tools
 
-        stream = await self._client.chat.completions.create(**kwargs)
+        stream = await self._retry_call(
+            lambda: self._client.chat.completions.create(**kwargs),
+            "OpenAI 流式 API",
+        )
 
         # 流式处理中累积 tool_call 信息
         tool_call_buffers: dict[int, dict] = {}

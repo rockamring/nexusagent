@@ -98,7 +98,10 @@ def create_llm(
     if final_model is None:
         final_model = config.default_model
 
-    kwargs: dict = {}
+    kwargs: dict = {
+        "max_retries": config.agent.max_retries,
+        "retry_delay": config.agent.retry_delay,
+    }
     if final_api_key:
         kwargs["api_key"] = final_api_key
     if final_base_url:

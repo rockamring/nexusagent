@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator, Iterable
+from collections.abc import AsyncIterator
 
 
 async def merge_streams(*streams: AsyncIterator) -> AsyncIterator:

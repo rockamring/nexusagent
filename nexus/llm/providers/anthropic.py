@@ -32,7 +32,10 @@ class AnthropicProvider(BaseLLM):
         api_key: str,
         default_model: str = "claude-sonnet-4-6",
         base_url: str | None = None,
+        max_retries: int = 3,
+        retry_delay: float = 1.0,
     ):
+        super().__init__(max_retries=max_retries, retry_delay=retry_delay)
         client_kwargs: dict = {"api_key": api_key}
         if base_url:
             client_kwargs["base_url"] = base_url
@@ -83,7 +86,10 @@ class AnthropicProvider(BaseLLM):
         if temperature > 0:
             kwargs["temperature"] = temperature
 
-        response = await self._client.messages.create(**kwargs)
+        response = await self._retry_call(
+            lambda: self._client.messages.create(**kwargs),
+            "Anthropic API",
+        )
 
         content = None
         tool_calls = None
@@ -147,7 +153,11 @@ class AnthropicProvider(BaseLLM):
         if temperature > 0:
             kwargs["temperature"] = temperature
 
-        async with self._client.messages.stream(**kwargs) as stream:
+        async def _create_stream():
+            return self._client.messages.stream(**kwargs)
+
+        stream_ctx = await self._retry_call(_create_stream, "Anthropic 流式 API")
+        async with stream_ctx as stream:
             async for event in stream:
                 if event.type == "text":
                     yield event.text

@@ -9,9 +9,8 @@ from nexus.agent.base import BaseAgent
 from nexus.agent.react_agent import ReActAgent
 from nexus.core.types import AgentResult, LLMResponse
 from nexus.llm.messages import to_openai_messages
-from nexus.tools.registry import ToolRegistry
 from nexus.tools.base import Tool
-
+from nexus.tools.registry import ToolRegistry
 
 # ── Mock LLM ────────────────────────────────
 
