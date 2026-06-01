@@ -20,6 +20,9 @@ dev = [
     "ruff>=0.4",
     "mypy>=1.10",
 ]
+web = [
+    "gradio>=5.0",
+]
 
 [tool.ruff]
 target-version = "py311"
