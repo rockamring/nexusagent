@@ -301,3 +301,158 @@ class TestGeminiProvider:
         assert provider.default_model == "gemini-2.5-flash"
         assert "gemini-2.5-pro" in provider.supported_models
         assert "gemini-2.5-flash" in provider.supported_models
+
+
+# ── OpenAIProvider 流式测试 ────────────────────
+
+class TestOpenAIProviderStream:
+    """OpenAIProvider 流式输出测试。"""
+
+    @pytest.fixture
+    def provider(self):
+        from nexus.llm.providers.openai import OpenAIProvider
+        return OpenAIProvider(api_key="test-key", default_model="gpt-4o-mini")
+
+    @pytest.mark.asyncio
+    async def test_stream_text(self, provider):
+        """流式输出纯文本块。"""
+        chunk1 = MagicMock()
+        chunk1.choices = [MagicMock()]
+        chunk1.choices[0].delta = MagicMock()
+        chunk1.choices[0].delta.content = "你好"
+        chunk1.choices[0].delta.tool_calls = None
+
+        chunk2 = MagicMock()
+        chunk2.choices = [MagicMock()]
+        chunk2.choices[0].delta = MagicMock()
+        chunk2.choices[0].delta.content = "世界"
+        chunk2.choices[0].delta.tool_calls = None
+
+        async def mock_stream():
+            for c in [chunk1, chunk2]:
+                yield c
+
+        mock_result = MagicMock()
+        mock_result.__aiter__ = lambda self: mock_stream().__aiter__()
+
+        with patch.object(provider._client.chat.completions, "create",
+                          AsyncMock(return_value=mock_result)):
+            chunks = []
+            async for chunk in provider.generate_stream(
+                [{"role": "user", "content": "Hello"}]
+            ):
+                chunks.append(chunk)
+
+        assert chunks == ["你好", "世界"]
+
+    @pytest.mark.asyncio
+    async def test_stream_tool_call(self, provider):
+        """流式输出含工具调用的 chunk。"""
+        chunk_tc1 = MagicMock()
+        chunk_tc1.choices = [MagicMock()]
+        chunk_tc1.choices[0].delta = MagicMock()
+        chunk_tc1.choices[0].delta.content = None
+        tc_delta_1 = MagicMock()
+        tc_delta_1.index = 0
+        tc_delta_1.id = "call_abc"
+        tc_delta_1.function = MagicMock()
+        tc_delta_1.function.name = "get_weather"
+        tc_delta_1.function.arguments = '{"city":'
+        chunk_tc1.choices[0].delta.tool_calls = [tc_delta_1]
+
+        chunk_tc2 = MagicMock()
+        chunk_tc2.choices = [MagicMock()]
+        chunk_tc2.choices[0].delta = MagicMock()
+        chunk_tc2.choices[0].delta.content = None
+        tc_delta_2 = MagicMock()
+        tc_delta_2.index = 0
+        tc_delta_2.id = None
+        tc_delta_2.function = MagicMock()
+        tc_delta_2.function.name = None
+        tc_delta_2.function.arguments = '"北京"}'
+        chunk_tc2.choices[0].delta.tool_calls = [tc_delta_2]
+
+        async def mock_stream():
+            for c in [chunk_tc1, chunk_tc2]:
+                yield c
+
+        mock_result = MagicMock()
+        mock_result.__aiter__ = lambda self: mock_stream().__aiter__()
+
+        with patch.object(provider._client.chat.completions, "create",
+                          AsyncMock(return_value=mock_result)):
+            chunks = []
+            async for chunk in provider.generate_stream(
+                [{"role": "user", "content": "查天气"}]
+            ):
+                chunks.append(chunk)
+
+        # 应该产出一个 ToolCall
+        assert len(chunks) == 1
+        tc = chunks[0]
+        assert isinstance(tc, dict)
+        assert tc["name"] == "get_weather"
+        assert tc["arguments"] == {"city": "北京"}
+
+    @pytest.mark.asyncio
+    async def test_stream_text_and_tool_call(self, provider):
+        """流式输出既有文本又有工具调用。"""
+        chunk_text = MagicMock()
+        chunk_text.choices = [MagicMock()]
+        chunk_text.choices[0].delta = MagicMock()
+        chunk_text.choices[0].delta.content = "让我查一下"
+        chunk_text.choices[0].delta.tool_calls = None
+
+        chunk_tc = MagicMock()
+        chunk_tc.choices = [MagicMock()]
+        chunk_tc.choices[0].delta = MagicMock()
+        chunk_tc.choices[0].delta.content = None
+        tc_delta = MagicMock()
+        tc_delta.index = 0
+        tc_delta.id = "call_x"
+        tc_delta.function = MagicMock()
+        tc_delta.function.name = "search"
+        tc_delta.function.arguments = '{"query":"Python"}'
+        chunk_tc.choices[0].delta.tool_calls = [tc_delta]
+
+        async def mock_stream():
+            for c in [chunk_text, chunk_tc]:
+                yield c
+
+        mock_result = MagicMock()
+        mock_result.__aiter__ = lambda self: mock_stream().__aiter__()
+
+        with patch.object(provider._client.chat.completions, "create",
+                          AsyncMock(return_value=mock_result)):
+            chunks = []
+            async for chunk in provider.generate_stream(
+                [{"role": "user", "content": "Search Python"}]
+            ):
+                chunks.append(chunk)
+
+        assert "让我查一下" in chunks
+        assert len(chunks) == 2
+        assert isinstance(chunks[1], dict)
+        assert chunks[1]["name"] == "search"
+
+    @pytest.mark.asyncio
+    async def test_stream_empty_delta(self, provider):
+        """delta 为 None 时正常跳过。"""
+        chunk = MagicMock()
+        chunk.choices = []
+
+        async def mock_stream():
+            yield chunk
+
+        mock_result = MagicMock()
+        mock_result.__aiter__ = lambda self: mock_stream().__aiter__()
+
+        with patch.object(provider._client.chat.completions, "create",
+                          AsyncMock(return_value=mock_result)):
+            chunks = []
+            async for chunk in provider.generate_stream(
+                [{"role": "user", "content": "Hello"}]
+            ):
+                chunks.append(chunk)
+
+        assert chunks == []

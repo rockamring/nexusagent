@@ -14,6 +14,7 @@ import uuid
 from datetime import datetime, timezone
 
 from nexus.core.types import Message
+from nexus.embeddings.base import BaseEmbeddingProvider
 from nexus.memory.base import BaseMemory
 
 
@@ -23,10 +24,20 @@ class VectorStoreMemory(BaseMemory):
     支持跨会话持久化，通过语义相似度检索最相关的历史记忆。
 
     用法:
+        # 使用默认嵌入（SHA-256 哈希，适合测试）
         memory = VectorStoreMemory(
             persist_dir="./agent_memory",
             collection_name="my_agent",
         )
+
+        # 使用真实 Embedding（适合生产）
+        from nexus.embeddings import OpenAIEmbeddingProvider
+        provider = OpenAIEmbeddingProvider(api_key="sk-...")
+        memory = VectorStoreMemory(
+            persist_dir="./agent_memory",
+            embedding_provider=provider,
+        )
+
         await memory.add({"role": "user", "content": "我喜欢 Python"})
         # ... 下次会话 ...
         ctx = await memory.get_context(query="编程语言")
@@ -37,6 +48,7 @@ class VectorStoreMemory(BaseMemory):
         persist_dir: str = "./memory_data",
         collection_name: str = "agent_memory",
         embedding_fn: callable | None = None,
+        embedding_provider: BaseEmbeddingProvider | None = None,
     ):
         import chromadb
 
@@ -45,7 +57,10 @@ class VectorStoreMemory(BaseMemory):
             name=collection_name,
             metadata={"hnsw:space": "cosine"},
         )
-        self._embedding_fn = embedding_fn or self._default_embedding
+        if embedding_provider:
+            self._embedding_fn = embedding_provider.embed
+        else:
+            self._embedding_fn = embedding_fn or self._default_embedding
 
     @staticmethod
     async def _default_embedding(text: str) -> list[float]:
