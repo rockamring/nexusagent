@@ -312,3 +312,143 @@ async def test_agent_writes_tool_calls_to_memory():
     assert ctx[2].get("tool_call_id") == "call_1"
     assert ctx[3]["role"] == "assistant"
     assert "16:00" in ctx[3]["content"]
+
+
+# ── Human-in-the-Loop 测试 ────────────────
+
+
+@pytest.mark.asyncio
+async def test_tool_with_approval_approved():
+    """审批通过 — 工具正常执行。"""
+    from nexus.agent.react_agent import ReActAgent
+
+    @Tool.from_function(name="delete_file", description="删除文件", requires_approval=True)
+    async def delete_file(path: str) -> str:
+        return f"已删除: {path}"
+
+    tools = ToolRegistry()
+    tools.register(delete_file)
+
+    llm = MockLLM(responses=[
+        LLMResponse(
+            content=None,
+            tool_calls=[{"id": "call_1", "name": "delete_file", "arguments": {"path": "/tmp/test.txt"}}],
+            finish_reason="tool_calls",
+        ),
+        LLMResponse(content="文件已成功删除。", finish_reason="stop"),
+    ])
+
+    async def always_approve(tool_name: str, arguments: dict) -> bool:
+        return True
+
+    agent = ReActAgent(
+        name="审批测试",
+        llm=llm,
+        tools=tools,
+        system_prompt="你是文件管理助手。",
+        approval_callback=always_approve,
+    )
+
+    result = await agent.run("删除 /tmp/test.txt")
+    assert "删除" in result.content or "文件" in result.content
+    # 工具应该被执行了
+    assert len(result.tool_calls_history) == 1
+    assert result.tool_calls_history[0].tool_name == "delete_file"
+    assert result.tool_calls_history[0].error is None
+
+
+@pytest.mark.asyncio
+async def test_tool_with_approval_denied():
+    """审批拒绝 — 工具不执行，返回拒绝消息给 LLM。"""
+    from nexus.agent.react_agent import ReActAgent
+
+    @Tool.from_function(name="delete_file", description="删除文件", requires_approval=True)
+    async def delete_file(path: str) -> str:
+        return f"已删除: {path}"
+
+    tools = ToolRegistry()
+    tools.register(delete_file)
+
+    llm = MockLLM(responses=[
+        LLMResponse(
+            content=None,
+            tool_calls=[{"id": "call_1", "name": "delete_file", "arguments": {"path": "/tmp/test.txt"}}],
+            finish_reason="tool_calls",
+        ),
+        LLMResponse(content="好的，我不会删除该文件。", finish_reason="stop"),
+    ])
+
+    async def always_deny(tool_name: str, arguments: dict) -> bool:
+        return False
+
+    agent = ReActAgent(
+        name="审批测试",
+        llm=llm,
+        tools=tools,
+        system_prompt="你是文件管理助手。",
+        approval_callback=always_deny,
+    )
+
+    result = await agent.run("删除 /tmp/test.txt")
+    assert "不" in result.content or "拒绝" in result.content or "不会" in result.content
+    # 工具被记录为拒绝
+    assert len(result.tool_calls_history) == 1
+    assert result.tool_calls_history[0].tool_name == "delete_file"
+    assert result.tool_calls_history[0].error == "用户拒绝"
+
+
+@pytest.mark.asyncio
+async def test_tool_without_approval_runs_normally():
+    """无 requires_approval 标记的工具直接执行，不受审批回调影响。"""
+    from nexus.agent.react_agent import ReActAgent
+
+    @Tool.from_function(name="read_file", description="读取文件")
+    async def read_file(path: str) -> str:
+        return "文件内容: Hello"
+
+    tools = ToolRegistry()
+    tools.register(read_file)
+
+    llm = MockLLM(responses=[
+        LLMResponse(
+            content=None,
+            tool_calls=[{"id": "call_1", "name": "read_file", "arguments": {"path": "/tmp/readme.txt"}}],
+            finish_reason="tool_calls",
+        ),
+        LLMResponse(content="文件内容是: Hello", finish_reason="stop"),
+    ])
+
+    async def always_deny(tool_name: str, arguments: dict) -> bool:
+        return False  # 对不需要审批的工具，这个回调不会被调用
+
+    agent = ReActAgent(
+        name="审批测试",
+        llm=llm,
+        tools=tools,
+        system_prompt="你是文件管理助手。",
+        approval_callback=always_deny,
+    )
+
+    result = await agent.run("读取文件")
+    # 即使回调总是拒绝，无标记的工具仍正常执行
+    assert len(result.tool_calls_history) == 1
+    assert result.tool_calls_history[0].tool_name == "read_file"
+    assert result.tool_calls_history[0].error is None
+
+
+def test_tool_requires_approval_default():
+    """默认情况下 requires_approval 为 False。"""
+    @Tool.from_function(name="normal_tool", description="普通工具")
+    async def normal_tool() -> str:
+        return "done"
+
+    assert normal_tool.requires_approval is False
+
+
+def test_tool_requires_approval_true():
+    """设置 requires_approval=True 后属性为 True。"""
+    @Tool.from_function(name="dangerous", description="危险工具", requires_approval=True)
+    async def dangerous() -> str:
+        return "done"
+
+    assert dangerous.requires_approval is True

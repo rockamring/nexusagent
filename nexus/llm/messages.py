@@ -154,6 +154,78 @@ def tools_to_anthropic_format(tools: list[dict]) -> list[dict]:
     ]
 
 
+def to_gemini_messages(messages: list[Message]) -> tuple[str | None, list[dict]]:
+    """将框架 Message 列表转为 Gemini API 格式。
+
+    Gemini 的 system prompt 是独立参数 (system_instruction)，不作为 contents 条目。
+    角色映射: assistant → "model", tool → "user" (via function_response)
+
+    返回 (system_instruction, contents)。
+    """
+    system_instruction = None
+    contents: list[dict] = []
+
+    for msg in messages:
+        role = msg["role"]
+
+        if role == "system":
+            system_instruction = msg.get("content", "")
+        elif role == "user":
+            contents.append({"role": "user", "parts": [{"text": msg.get("content", "")}]})
+        elif role == "assistant":
+            contents.append(_build_gemini_model_content(msg))
+        elif role == "tool":
+            contents.append({
+                "role": "user",
+                "parts": [{
+                    "function_response": {
+                        "id": msg.get("tool_call_id", ""),
+                        "name": msg.get("name", ""),
+                        "response": {"result": msg.get("content", "")},
+                    }
+                }],
+            })
+
+    return system_instruction, contents
+
+
+def _build_gemini_model_content(msg: Message) -> dict:
+    """构建 Gemini model 角色的 Content，可同时包含 text 和 function_call。"""
+    parts: list[dict] = []
+    text = msg.get("content")
+    if text:
+        parts.append({"text": text})
+    tool_calls = msg.get("tool_calls")
+    if tool_calls:
+        for tc in tool_calls:
+            parts.append({
+                "function_call": {
+                    "id": tc["id"],
+                    "name": tc["name"],
+                    "args": tc.get("arguments", {}),
+                }
+            })
+    return {"role": "model", "parts": parts}
+
+
+def tools_to_gemini_format(tools: list[dict]) -> list[dict]:
+    """将框架通用 JSON Schema 格式转为 Gemini Tool 格式。
+
+    Gemini 将所有函数声明放在一个 Tool 对象中:
+    [{"function_declarations": [{name, description, parameters}, ...]}]
+    """
+    return [{
+        "function_declarations": [
+            {
+                "name": t["name"],
+                "description": t.get("description", ""),
+                "parameters": t.get("parameters", {"type": "object", "properties": {}, "required": []}),
+            }
+            for t in tools
+        ]
+    }]
+
+
 def _dump_json(obj: object) -> str:
     import json
     return json.dumps(obj, ensure_ascii=False)

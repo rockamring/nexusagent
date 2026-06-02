@@ -73,14 +73,25 @@ class Tool(BaseTool):
     自动从函数签名和类型注解推导 JSON Schema。
     """
 
-    def __init__(self, name: str, description: str, func: Callable, schema: dict):
+    def __init__(
+        self, name: str, description: str, func: Callable, schema: dict,
+        requires_approval: bool = False,
+    ):
         self._name = name
         self._description = description
         self._func = func
         self._schema = schema
+        self._requires_approval = requires_approval
+
+    @property
+    def requires_approval(self) -> bool:
+        """是否需要人工审批后才可执行。"""
+        return self._requires_approval
 
     @staticmethod
-    def from_function(name: str, description: str) -> Callable:
+    def from_function(
+        name: str, description: str, *, requires_approval: bool = False,
+    ) -> Callable:
         """装饰器：把 async 函数包装为 Tool。
 
         自动从函数签名生成 JSON Schema，参数名和类型从类型注解推导。
@@ -88,6 +99,7 @@ class Tool(BaseTool):
         Args:
             name: 工具名称（暴露给 LLM 的函数名）
             description: 工具描述（帮助 LLM 理解何时使用此工具）
+            requires_approval: 是否需要人工审批后才可执行
 
         Example:
             @Tool.from_function(name="calculator", description="执行数学运算")
@@ -96,7 +108,10 @@ class Tool(BaseTool):
         """
         def decorator(func: Callable) -> Tool:
             schema = build_schema(func, name, description)
-            return Tool(name=name, description=description, func=func, schema=schema)
+            return Tool(
+                name=name, description=description, func=func, schema=schema,
+                requires_approval=requires_approval,
+            )
         return decorator
 
     @property

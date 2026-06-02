@@ -32,10 +32,12 @@ def _register_builtin_providers() -> None:
         return
 
     from nexus.llm.providers.anthropic import AnthropicProvider
+    from nexus.llm.providers.google import GeminiProvider
     from nexus.llm.providers.openai import OpenAIProvider
 
     LLMRegistry.register("openai", OpenAIProvider)
     LLMRegistry.register("anthropic", AnthropicProvider)
+    LLMRegistry.register("google", GeminiProvider)
     _builtin_registered = True
 
 

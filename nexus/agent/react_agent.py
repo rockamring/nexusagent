@@ -28,7 +28,7 @@
 from __future__ import annotations
 
 import time
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 
 from nexus.agent.base import BaseAgent
 from nexus.core.errors import MaxIterationError, ToolNotFoundError
@@ -74,6 +74,7 @@ class ReActAgent(BaseAgent):
         loop_detection_threshold: int = 3,
         pre_model_hook: Callable[[list[Message]], list[Message]] | None = None,
         post_model_hook: Callable[[LLMResponse], LLMResponse] | None = None,
+        approval_callback: Callable[[str, dict], Awaitable[bool]] | None = None,
     ):
         self.name = name
         self._llm = llm
@@ -85,6 +86,7 @@ class ReActAgent(BaseAgent):
         self._loop_detection_threshold = loop_detection_threshold
         self._pre_model_hook = pre_model_hook
         self._post_model_hook = post_model_hook
+        self._approval_callback = approval_callback
 
         # 追踪状态
         self._iteration = 0
@@ -308,11 +310,54 @@ class ReActAgent(BaseAgent):
 
         每个 tool_call 对应一条 tool 角色消息。
         工具执行异常会被捕获并作为错误信息返回给 LLM。
+
+        如果设置了 approval_callback 且工具标记了 requires_approval，
+        则在执行前请求人工审批。被拒绝的工具将返回拒绝消息给 LLM。
         """
+        from nexus.tools.base import Tool as _Tool
+
         for tc in tool_calls:
             tool_name = tc["name"]
             arguments = tc.get("arguments", {})
             call_id = tc["id"]
+
+            # ── Human-in-the-Loop 审批检查 ──
+            if self._approval_callback:
+                try:
+                    tool = self._tools.get(tool_name)
+                    if isinstance(tool, _Tool) and tool.requires_approval:
+                        approved = await self._approval_callback(tool_name, arguments)
+                        if not approved:
+                            result_text = f"用户拒绝了工具 '{tool_name}' 的执行请求。"
+                            self._tool_call_log.append(ToolCallRecord(
+                                tool_name=tool_name,
+                                arguments=arguments,
+                                result=result_text,
+                                error="用户拒绝",
+                                elapsed_ms=0,
+                            ))
+                            logger.info(
+                                "agent_act",
+                                agent=self.name,
+                                tool=tool_name,
+                                arguments=str(arguments)[:100],
+                                error="用户拒绝",
+                            )
+                            messages.append({
+                                "role": "tool",
+                                "content": result_text,
+                                "tool_call_id": call_id,
+                                "name": tool_name,
+                            })
+                            if self._memory:
+                                await self._memory.add({
+                                    "role": "tool",
+                                    "content": f"[{tool_name}] {result_text}",
+                                    "tool_call_id": call_id,
+                                })
+                            continue
+                except KeyError:
+                    pass  # 工具未注册，交由下方异常处理
 
             start = time.perf_counter()
             try:
