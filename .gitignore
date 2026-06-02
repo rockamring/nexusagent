@@ -34,6 +34,7 @@ config.yml
 # Memory data (ChromaDB)
 memory_data/
 test_memory_data_*/
+test_rag_data_*/
 
 # OS
 .DS_Store
