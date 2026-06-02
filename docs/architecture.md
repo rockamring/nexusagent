@@ -94,10 +94,71 @@ async def get_weather(city: str, date: str = "today") -> str:
 
 按"每一步都可运行验证"的原则分 7 个阶段：
 
-1. **基础设施** — 类型、异常、配置、日志
-2. **LLM Provider** — 能调用模型获得回复
-3. **Tool 系统** — 能定义工具让 LLM 生成 tool_calls
-4. **ReAct Agent** — 配合工具完成多步骤任务 ⭐核心
-5. **Memory 系统** — 跨会话记忆
-6. **多 Agent 编排** — 多 Agent 协同工作流
-7. **示例与测试** — 可交付使用
+1. **基础设施** — 类型、异常、配置、日志 ✅
+2. **LLM Provider** — OpenAI + Anthropic + Google ✅
+3. **Tool 系统** — 函数→JSON Schema 自动推导 ✅
+4. **ReAct Agent** — Think→Act→Observe 主循环 ✅
+5. **Memory 系统** — 双层记忆（短期+长期向量）✅
+6. **多 Agent 编排** — Sequential / Supervisor / Graph ✅
+7. **示例与测试** — 147 个测试覆盖全部模块 ✅
+
+## 8. 功能里程碑
+
+### Tier 1: 核心增强 (502d2ce)
+
+**LLM 调用重试机制** (`nexus/llm/base.py`)
+- `_retry_call()` 指数退避重试包装器，自动处理网络抖动和速率限制
+- `_is_retryable_error()` 可重试错误判断（429/5xx/ConnectionError/Timeout）
+- 所有 Provider 共享同一套重试逻辑，通过 `max_retries`/`retry_delay` 配置
+
+**死循环主动干预** (`nexus/agent/react_agent.py:_check_loop()`)
+- 检测连续 N 次相同的 tool_call 调用（默认 3 次）
+- 检测到循环时向消息历史注入干预提示，引导 Agent 尝试其他方法
+- 不再仅打 warning，而是主动改变 LLM 看到的消息上下文
+
+**流式输出完善** (`nexus/agent/react_agent.py:stream()`)
+- 重写 stream() 方法的流式循环逻辑
+- text chunk 立即 yield 给用户，tool_call 累积后执行，无 tool_call 时流式输出即为最终回复
+- 用户在工具调用过程中也能看到模型的"思考"过程
+
+### Tier 2: 生态扩展 (b6e1e91)
+
+**Google Gemini Provider** (`nexus/llm/providers/google.py`)
+- 基于 `google-genai` 2.7.0 SDK 实现
+- 关键设计：`AutomaticFunctionCallingConfig(disable=True)` 禁用 SDK 自动函数调用
+- Gemini 消息格式转换：system→`system_instruction`，assistant→`"model"` 角色，tool→`"user"` 角色 + `function_response`
+- 注册到 `LLMRegistry`，通过 `create_llm("google")` 使用
+
+**Prompt 模板系统** (`nexus/prompts/`)
+- `PromptTemplate`：零依赖、正则驱动的 `{{ variable }}` 模板引擎
+- Jinja2 兼容语法，未来可无缝切换
+- `from_file()` 支持外部 .txt 文件加载
+- 8 个预设模板：ASSISTANT、CHINESE_ASSISTANT、CODE_REVIEWER、CODE_WRITER 等
+
+**Human-in-the-Loop 安全审批** (`nexus/agent/guard.py`)
+- `CLIApproval` 命令行交互式审批器
+- Tool 级 `requires_approval` 标记 + Agent 级 `approval_callback` 回调
+- 拒绝后返回错误消息给 LLM（不抛异常），Agent 可调整策略继续
+
+### Tier 3: 深度完善 (34e6fcd)
+
+**Embedding Provider** (`nexus/embeddings/`)
+- `BaseEmbeddingProvider` 抽象基类：`embed()` + `embed_batch()`
+- `OpenAIEmbeddingProvider`：封装 OpenAI `text-embedding-3-small`，支持自定义 base_url
+- `VectorStoreMemory` 改造：优先使用 provider 嵌入，未提供时保留 SHA-256 哈希回退
+- 遵循与 LLM Provider 相同的抽象基类 + 依赖注入模式
+
+**Eval 评估框架** (`nexus/eval/`)
+- `EvalCase`：测试用例定义，支持期望输出（字符串/列表）、工具调用验证
+- `EvalResult`：评估结果，包含通过状态、实际输出、调用详情
+- `EvalSuite`：批量执行 + 格式化报告（通过率、失败详情）
+- Agent 异常不中断评估，记录为失败用例
+
+**测试覆盖补充** (新增 80 个测试)
+- `test_config.py`：YAML 加载、环境变量解析、自动发现
+- `test_factory.py`：LLMRegistry 注册/创建/覆盖
+- `test_handoff.py`：HandoffTool、SequentialOrchestrator、数据流验证
+- `test_embeddings.py`：Provider 行为、VectorStore 集成
+- `test_eval.py`：用例定义、执行、报告生成
+- `test_providers.py`：补充 OpenAI 流式输出测试
+- 总测试数：147 个（从初始 68 个增长 116%）
