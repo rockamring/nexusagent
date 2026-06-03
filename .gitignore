@@ -31,10 +31,8 @@ htmlcov/
 config.yaml
 config.yml
 
-# Memory data (ChromaDB)
-memory_data/
-test_memory_data_*/
-test_rag_data_*/
+# 测试/运行时临时数据
+temp/
 
 # OS
 .DS_Store

@@ -268,7 +268,7 @@ async def test_knowledge_store_add_and_count():
     """添加文档后 count 正确。"""
     provider = MockEmbeddingProvider(dim=128)
     store = KnowledgeStore(
-        persist_dir="./test_rag_data_add",
+        persist_dir="./temp/test_rag_data_add",
         collection_name="test_add_count",
         embedding_provider=provider,
     )
@@ -287,7 +287,7 @@ async def test_knowledge_store_search():
     """语义搜索返回 SearchResult 列表。"""
     provider = MockEmbeddingProvider(dim=128)
     store = KnowledgeStore(
-        persist_dir="./test_rag_data_search",
+        persist_dir="./temp/test_rag_data_search",
         collection_name="test_search",
         embedding_provider=provider,
     )
@@ -309,7 +309,7 @@ async def test_knowledge_store_empty_search():
     """空库搜索返回空列表。"""
     provider = MockEmbeddingProvider(dim=128)
     store = KnowledgeStore(
-        persist_dir="./test_rag_data_empty",
+        persist_dir="./temp/test_rag_data_empty",
         collection_name="test_empty_search",
         embedding_provider=provider,
     )
@@ -322,7 +322,7 @@ async def test_knowledge_store_delete_by_source():
     """按 source 删除文档正确。"""
     provider = MockEmbeddingProvider(dim=128)
     store = KnowledgeStore(
-        persist_dir="./test_rag_data_delete",
+        persist_dir="./temp/test_rag_data_delete",
         collection_name="test_delete",
         embedding_provider=provider,
     )
@@ -343,7 +343,7 @@ async def test_knowledge_store_delete_by_source():
 async def test_knowledge_store_default_embedding():
     """未提供 EmbeddingProvider 时使用 SHA-256 回退。"""
     store = KnowledgeStore(
-        persist_dir="./test_rag_data_default",
+        persist_dir="./temp/test_rag_data_default",
         collection_name="test_default_emb",
     )
     docs = [Document(content="Test content for default embedding.")]
@@ -358,7 +358,7 @@ async def test_knowledge_store_add_empty_docs():
     """添加空文档列表返回 0。"""
     provider = MockEmbeddingProvider(dim=128)
     store = KnowledgeStore(
-        persist_dir="./test_rag_data_empty_docs",
+        persist_dir="./temp/test_rag_data_empty_docs",
         collection_name="test_empty_docs",
         embedding_provider=provider,
     )
@@ -373,7 +373,7 @@ async def test_retriever_retrieve():
     """Retriever.retrieve 返回 SearchResult 列表。"""
     provider = MockEmbeddingProvider(dim=128)
     store = KnowledgeStore(
-        persist_dir="./test_rag_data_retrieve",
+        persist_dir="./temp/test_rag_data_retrieve",
         collection_name="test_retrieve",
         embedding_provider=provider,
     )
@@ -394,7 +394,7 @@ async def test_retriever_retrieve_formatted():
     """retrieve_formatted 返回带来源标注的格式化字符串。"""
     provider = MockEmbeddingProvider(dim=128)
     store = KnowledgeStore(
-        persist_dir="./test_rag_data_formatted",
+        persist_dir="./temp/test_rag_data_formatted",
         collection_name="test_formatted",
         embedding_provider=provider,
     )
@@ -415,7 +415,7 @@ async def test_retriever_retrieve_formatted_empty():
     """空库检索返回提示信息。"""
     provider = MockEmbeddingProvider(dim=128)
     store = KnowledgeStore(
-        persist_dir="./test_rag_data_empty_ret",
+        persist_dir="./temp/test_rag_data_empty_ret",
         collection_name="test_empty_ret",
         embedding_provider=provider,
     )
@@ -435,7 +435,7 @@ async def test_pipeline_ingest_file(temp_text_file):
         loader=TextLoader(),
         splitter=RecursiveCharacterTextSplitter(chunk_size=100, chunk_overlap=20),
         knowledge_store=KnowledgeStore(
-            persist_dir="./test_rag_data_pipeline",
+            persist_dir="./temp/test_rag_data_pipeline",
             collection_name="test_pipeline_file",
             embedding_provider=provider,
         ),
@@ -457,7 +457,7 @@ async def test_pipeline_ingest_directory(temp_directory):
         loader=DirectoryLoader(),
         splitter=RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50),
         knowledge_store=KnowledgeStore(
-            persist_dir="./test_rag_data_pipeline_dir",
+            persist_dir="./temp/test_rag_data_pipeline_dir",
             collection_name="test_pipeline_dir",
             embedding_provider=provider,
         ),

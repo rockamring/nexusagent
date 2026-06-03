@@ -132,7 +132,7 @@ async def test_vector_store_with_embedding_provider():
     """VectorStoreMemory 使用 EmbeddingProvider 进行语义检索。"""
     provider = MockEmbeddingProvider(dim=128)
     memory = VectorStoreMemory(
-        persist_dir="./test_memory_data_1",
+        persist_dir="./temp/test_memory_data_1",
         collection_name="test_provider",
         embedding_provider=provider,
     )
@@ -154,7 +154,7 @@ async def test_vector_store_with_embedding_provider():
 async def test_vector_store_default_embedding():
     """未提供 EmbeddingProvider 时使用 SHA-256 默认嵌入。"""
     memory = VectorStoreMemory(
-        persist_dir="./test_memory_data_2",
+        persist_dir="./temp/test_memory_data_2",
         collection_name="test_default",
     )
 
@@ -175,7 +175,7 @@ async def test_vector_store_custom_embedding_fn():
         return [0.5] * 384
 
     memory = VectorStoreMemory(
-        persist_dir="./test_memory_data_3",
+        persist_dir="./temp/test_memory_data_3",
         collection_name="test_custom_fn",
         embedding_fn=my_embed,
     )
@@ -193,7 +193,7 @@ async def test_vector_store_custom_embedding_fn():
 async def test_vector_store_empty_query():
     """空查询或无记忆时返回空列表。"""
     memory = VectorStoreMemory(
-        persist_dir="./test_memory_data_4",
+        persist_dir="./temp/test_memory_data_4",
         collection_name="test_empty",
     )
     # 无数据时应返回空
@@ -205,7 +205,7 @@ async def test_vector_store_empty_query():
 async def test_vector_store_add_empty_content():
     """content 为空的消息不存储。"""
     memory = VectorStoreMemory(
-        persist_dir="./test_memory_data_5",
+        persist_dir="./temp/test_memory_data_5",
         collection_name="test_empty_content",
     )
     await memory.add({"role": "user", "content": ""})
@@ -217,7 +217,7 @@ async def test_vector_store_add_empty_content():
 async def test_vector_store_count():
     """count 属性返回正确的记忆条数。"""
     memory = VectorStoreMemory(
-        persist_dir="./test_memory_data_6",
+        persist_dir="./temp/test_memory_data_6",
         collection_name="test_count",
     )
     assert memory.count == 0
