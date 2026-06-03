@@ -9,8 +9,8 @@
 
 import asyncio
 
-from nexus.llm import create_llm
 from nexus.agent import ReActAgent
+from nexus.llm import create_llm
 
 
 async def main():

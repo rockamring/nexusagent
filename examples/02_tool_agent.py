@@ -9,11 +9,11 @@
 
 import asyncio
 
-from nexus.llm import create_llm
 from nexus.agent import ReActAgent
-from nexus.tools.registry import ToolRegistry
+from nexus.llm import create_llm
 from nexus.tools.builtin.calculator import calculator
-from nexus.tools.builtin.file_ops import read_file, write_file, list_files
+from nexus.tools.builtin.file_ops import list_files, read_file, write_file
+from nexus.tools.registry import ToolRegistry
 
 
 async def main():

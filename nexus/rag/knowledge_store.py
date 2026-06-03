@@ -69,13 +69,25 @@ class KnowledgeStore:
 
     @staticmethod
     async def _default_embedding(text: str) -> list[float]:
-        """SHA-256 回退嵌入（384 维）。
+        """字符 bigram 频率向量（384 维），作为默认回退嵌入。
+
+        原理：提取文本中的字符 bigram，哈希映射到 384 个桶中，
+        归一化后得到频率向量。相似文本共享更多 bigram，余弦距离更近。
 
         仅用于测试或无 API Key 的场景，生产环境应提供真实 EmbeddingProvider。
         """
         import hashlib
-        h = hashlib.sha256(text.encode()).digest()
-        return [float(b) / 255.0 for b in h * 12][:384]
+        dim = 384
+        vector = [0.0] * dim
+        text_lower = text.lower()
+        for i in range(len(text_lower) - 1):
+            bigram = text_lower[i:i + 2]
+            bucket = int(hashlib.md5(bigram.encode()).hexdigest(), 16) % dim
+            vector[bucket] += 1.0
+        total = sum(vector)
+        if total > 0:
+            vector = [v / total for v in vector]
+        return vector
 
     async def add_documents(self, docs: list[Document]) -> int:
         """嵌入并存储文档块。
@@ -151,23 +163,35 @@ class KnowledgeStore:
     def delete_by_source(self, source: str) -> int:
         """删除指定来源的所有文档块。
 
+        优先按 source 精确匹配（绝对路径），匹配不到则回退按 file_name 匹配。
+        这种两层回退使得调用方既可以用完整路径也可以用文件名删除。
+
         Args:
-            source: 来源标识（通常为 metadata 中存储的文件路径）
+            source: 来源标识（完整路径或文件名）
 
         Returns:
             删除的块数量
         """
         try:
-            results = self._collection.get(
-                where={"source": source},
-                include=[],
-            )
-            ids_to_delete = results.get("ids", [])
+            ids_to_delete = self._find_ids_by_metadata("source", source)
+            if not ids_to_delete:
+                ids_to_delete = self._find_ids_by_metadata("file_name", source)
             if ids_to_delete:
                 self._collection.delete(ids=ids_to_delete)
             return len(ids_to_delete)
         except Exception:
             return 0
+
+    def _find_ids_by_metadata(self, key: str, value: str) -> list[str]:
+        """按元数据字段精确匹配，返回对应的文档 ID 列表。"""
+        try:
+            results = self._collection.get(
+                where={key: value},
+                include=[],
+            )
+            return results.get("ids", [])
+        except Exception:
+            return []
 
     def clear(self) -> None:
         """清空所有文档。"""

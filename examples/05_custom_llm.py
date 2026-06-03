@@ -12,8 +12,7 @@
 import asyncio
 
 from nexus.core.config import NexusConfig
-from nexus.llm import create_llm, LLMRegistry
-from nexus.agent import ReActAgent
+from nexus.llm import LLMRegistry
 
 
 async def main():
@@ -60,8 +59,8 @@ async def main():
     print()
     print("方式 3: 注册自定义 Provider")
     print("-" * 30)
-    from nexus.llm.providers.openai import OpenAIProvider
     from nexus.llm.providers.anthropic import AnthropicProvider
+    from nexus.llm.providers.openai import OpenAIProvider
 
     LLMRegistry.register("openai", OpenAIProvider)
     LLMRegistry.register("anthropic", AnthropicProvider)

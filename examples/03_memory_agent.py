@@ -9,8 +9,8 @@
 
 import asyncio
 
-from nexus.llm import create_llm
 from nexus.agent import ReActAgent
+from nexus.llm import create_llm
 from nexus.memory import BufferMemory
 
 
@@ -32,7 +32,7 @@ async def main():
     print("第 1 轮")
     print("=" * 50)
     result = await agent.run("我叫小明，我喜欢 Python 编程。")
-    print(f"[用户] 我叫小明，我喜欢 Python 编程。")
+    print("[用户] 我叫小明，我喜欢 Python 编程。")
     print(f"[助手] {result.content}")
     print()
 
@@ -40,7 +40,7 @@ async def main():
     print("第 2 轮")
     print("=" * 50)
     result = await agent.run("能推荐一些适合我的学习资源吗？")
-    print(f"[用户] 能推荐一些适合我的学习资源吗？")
+    print("[用户] 能推荐一些适合我的学习资源吗？")
     print(f"[助手] {result.content}")
     print()
 
@@ -48,7 +48,7 @@ async def main():
     print("第 3 轮")
     print("=" * 50)
     result = await agent.run("我叫什么名字？我喜欢什么？")
-    print(f"[用户] 我叫什么名字？我喜欢什么？")
+    print("[用户] 我叫什么名字？我喜欢什么？")
     print(f"[助手] {result.content}")
     print()
     print(f"[记忆中的消息数] {len(memory._messages)}")

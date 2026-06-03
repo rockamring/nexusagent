@@ -9,16 +9,16 @@
 
 import asyncio
 
-from nexus.llm import create_llm
 from nexus.agent import ReActAgent
+from nexus.llm import create_llm
 from nexus.orchestrator import (
-    SequentialOrchestrator,
-    GraphOrchestrator,
     END,
+    GraphOrchestrator,
+    SequentialOrchestrator,
 )
 from nexus.orchestrator.state import OrchestratorState
-from nexus.tools.registry import ToolRegistry
 from nexus.tools.builtin.calculator import calculator
+from nexus.tools.registry import ToolRegistry
 
 
 async def demo_sequential():
@@ -91,7 +91,7 @@ async def demo_graph():
     graph.add_edge("general", END)
 
     result = await graph.run("请帮我计算 12345 * 67890 的结果")
-    print(f"[路由结果] math")
+    print("[路由结果] math")
     print(f"[最终输出] {result.final_output[:500]}...")
     print()
 

@@ -64,18 +64,28 @@ class VectorStoreMemory(BaseMemory):
 
     @staticmethod
     async def _default_embedding(text: str) -> list[float]:
-        """默认的简单 Embedding（基于字符哈希）。
+        """字符 bigram 频率向量（384 维），作为默认回退嵌入。
+
+        原理：提取文本中的字符 bigram，哈希映射到 384 个桶中，
+        归一化后得到频率向量。相似文本共享更多 bigram，余弦距离更近。
 
         生产环境应替换为真实的 Embedding 模型，如：
         - OpenAI text-embedding-3-small
         - sentence-transformers
         - ollama embedding
         """
-        # 使用简单的词袋哈希向量作为占位实现
         import hashlib
-        h = hashlib.sha256(text.encode()).digest()
-        # 生成 384 维向量（兼容常见的 Embedding 维度）
-        return [float(b) / 255.0 for b in h * 12][:384]
+        dim = 384
+        vector = [0.0] * dim
+        text_lower = text.lower()
+        for i in range(len(text_lower) - 1):
+            bigram = text_lower[i:i + 2]
+            bucket = int(hashlib.md5(bigram.encode()).hexdigest(), 16) % dim
+            vector[bucket] += 1.0
+        total = sum(vector)
+        if total > 0:
+            vector = [v / total for v in vector]
+        return vector
 
     async def add(self, message: Message) -> None:
         content = message.get("content")
